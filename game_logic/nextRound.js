@@ -27,7 +27,8 @@ export function incrementRound(gameState) {
  * @returns {Object} Updated game state with reset temporary data
  */
 export function resetTemporaryData(gameState) {
-  const resetPlayers = gameState.players.map(player => ({
+  const players = gameState.players || [];
+  const resetPlayers = players.map(player => ({
     ...player,
     answers: [],
     guesses: [],
@@ -80,10 +81,12 @@ export function assignNextClueGiver(gameState) {
  * @returns {Object} Updated game state with prepared board
  */
 export function prepareBoardState(gameState) {
+  const currentBoardState = gameState.boardState || {};
+  
   return {
     ...gameState,
     boardState: {
-      ...gameState.boardState,
+      ...currentBoardState,
       isReady: true,
       selectedCards: [],
       revealedCards: [],
