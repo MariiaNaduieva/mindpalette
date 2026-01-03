@@ -71,7 +71,7 @@ export function assignNextClueGiver(gameState) {
   return {
     ...gameState,
     players: updatedPlayers,
-    clueGiverId: updatedPlayers[nextClueGiverIndex].id,
+    clueGiverId: updatedPlayers[nextClueGiverIndex]?.id || null,
   };
 }
 
@@ -104,7 +104,7 @@ export function prepareBoardState(gameState) {
  */
 export function nextRound(gameState) {
   if (!gameState) {
-    throw new Error('Game state is required');
+    throw new Error('Invalid game state: gameState parameter is required and cannot be null or undefined');
   }
 
   // Step 1: Increment round number
