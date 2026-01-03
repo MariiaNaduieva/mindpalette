@@ -1,0 +1,1 @@
+export const rooms = {}; // Example structure: { roomId: { players: [], state: 'lobby' } }
