@@ -29,8 +29,8 @@ export function incrementRound(gameState) {
 export function resetTemporaryData(gameState) {
   const resetPlayers = gameState.players.map(player => ({
     ...player,
-    answers: player.answers ? [] : [],
-    guesses: player.guesses ? [] : [],
+    answers: [],
+    guesses: [],
     currentRoundScore: 0,
   }));
 
