@@ -29,8 +29,8 @@ export function incrementRound(gameState) {
 export function resetTemporaryData(gameState) {
   const resetPlayers = gameState.players.map(player => ({
     ...player,
-    answers: [],
-    guesses: [],
+    answers: player.answers ? [] : [],
+    guesses: player.guesses ? [] : [],
     currentRoundScore: 0,
   }));
 
@@ -38,11 +38,6 @@ export function resetTemporaryData(gameState) {
     ...gameState,
     players: resetPlayers,
     currentClue: null,
-    boardState: {
-      ...gameState.boardState,
-      selectedCards: [],
-      revealedCards: [],
-    },
   };
 }
 
@@ -59,9 +54,11 @@ export function assignNextClueGiver(gameState) {
   }
 
   // Find current clue giver index
+  // If no clue giver is found (returns -1), the next index will be 0 (first player)
   const currentClueGiverIndex = players.findIndex(player => player.isClueGiver);
   
   // Calculate next clue giver index (round-robin)
+  // When currentClueGiverIndex is -1 (no current clue giver), this defaults to 0
   const nextClueGiverIndex = (currentClueGiverIndex + 1) % players.length;
 
   // Update players with new clue giver
