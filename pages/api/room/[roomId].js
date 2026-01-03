@@ -1,71 +1,42 @@
-import { rooms } from '../../../utils/rooms';
+// Import necessary modules and libraries
+import { validateGamePhase, checkClueGiverPermission, updateGameState } from "../../../utils/game";
+import { getRoomById } from "../../../services/roomService";
 
-// Helper function to initialize room state
-function initializeRoom(roomId) {
-  return {
-    players: [],
-    state: 'lobby', // 'lobby', 'game', 'ended'
-    owner: null, // room creator
-    rounds: [], // array of round objects
-    currentRound: 0,
-    turnIndex: 0,
-  };
-}
-
-// Helper function to validate late join
-function canJoinRoom(roomState) {
-  return roomState.state === 'lobby';
-}
-
-export default function handler(req, res) {
-  const { roomId } = req.query;
-
-  if (req.method === 'GET') {
-    // Handle fetching room state
-    res.status(200).json(rooms[roomId] || { error: 'Room not found' });
-  } else if (req.method === 'POST') {
-    const { action, name } = req.body;
-
-    if (!rooms[roomId]) {
-      // Create a new room
-      rooms[roomId] = initializeRoom(roomId);
+export default async function handler(req, res) {
+    if (req.method !== 'POST') {
+        return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    const roomState = rooms[roomId];
+    const { roomId } = req.query;
+    const { userId, clue } = req.body;
 
-    switch (action) {
-      case 'join-room': {
-        if (!canJoinRoom(roomState)) {
-          return res.status(400).json({ error: 'GAME_ALREADY_STARTED' });
+    try {
+        // Validate that the room exists
+        const room = await getRoomById(roomId);
+        if (!room) {
+            return res.status(404).json({ error: 'Room not found' });
         }
 
-        const player = { id: Date.now(), name, chipColor: null, score: 0 };
-        if (roomState.players.length === 0) {
-          roomState.owner = player.id; // First player becomes room owner
+        // Validate the game phase
+        if (!validateGamePhase(room.state, 'clue_submission')) {
+            return res.status(400).json({ error: 'Invalid game phase for clue submission' });
         }
-        roomState.players.push(player);
-        return res.status(200).json(player);
-      }
 
-      case 'start-game': {
-        if (roomState.owner !== req.body.playerId) {
-          return res.status(403).json({ error: 'FORBIDDEN' });
+        // Check Clue Giver permissions
+        if (!checkClueGiverPermission(room.state, userId)) {
+            return res.status(403).json({ error: 'Permission denied. Only the designated Clue Giver can submit a clue.' });
         }
-        roomState.state = 'game';
-        roomState.rounds.push({ clue: '', chips: [], secretColor: null });
-        return res.status(200).json({ message: 'Game started' });
-      }
 
-      // Additional actions to be implemented:
-      // - submit-clue
-      // - place-chip
-      // - end-round
-      // - next-round
+        // Update the game state with the submitted clue
+        const updatedRoom = await updateGameState(roomId, {
+            ...room.state,
+            clues: [...room.state.clues, { clue, giver: userId }],
+            phase: 'guessing', // Transition to the next phase
+        });
 
-      default:
-        return res.status(400).json({ error: 'Invalid action' });
+        return res.status(200).json({ message: 'Clue submitted successfully', room: updatedRoom });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Internal Server Error' });
     }
-  } else {
-    res.status(405).json({ error: 'Method not allowed' });
-  }
 }
