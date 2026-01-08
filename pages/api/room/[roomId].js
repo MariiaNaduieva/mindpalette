@@ -1,60 +1,165 @@
-// Add your existing imports here
-const calculateScore = (players) => {
-    return players.map(player => {
-        const score = player.answers.reduce((acc, answer) => acc + answer.points, 0);
-        return { ...player, score };
-    });
-};
+import {
+  getRoom,
+  createRoom,
+  addPlayer,
+  startGame,
+  submitClue,
+  placeChip,
+  nextRound,
+  kickPlayer
+} from '../../../utils/rooms';
 
-const isEndOfGame = (round, maxRounds) => round >= maxRounds;
-
-const transitionToNextRound = (gameState) => {
-    gameState.round += 1;
-    gameState.players.forEach(player => {
-        player.answers = []; // Reset answers for next round
-    });
-    return gameState;
-};
-
+/**
+ * API Route: /api/room/[roomId]
+ * 
+ * Handles all game room actions:
+ * - GET: Fetch current room state (for polling)
+ * - POST: Execute actions (create, join, start-game, submit-clue, place-chip, next-round)
+ */
 export default function handler(req, res) {
-    if (req.method === 'POST') {
-        const { action, gameState } = req.body;
+  const { roomId } = req.query;
 
-        if (action === 'end-round') {
-            try {
-                // Calculate scores for the current round
-                const updatedPlayers = calculateScore(gameState.players);
-                gameState.players = updatedPlayers;
-
-                // Check if the game should end
-                if (isEndOfGame(gameState.round, gameState.maxRounds)) {
-                    return res.status(200).json({
-                        message: 'Game Over',
-                        gameState,
-                    });
-                }
-
-                // Transition to the next round
-                const updatedGameState = transitionToNextRound(gameState);
-
-                return res.status(200).json({
-                    message: 'Round ended, next round started',
-                    gameState: updatedGameState,
-                });
-            } catch (error) {
-                return res.status(500).json({
-                    message: 'Error processing end-round action',
-                    error: error.message,
-                });
-            }
-        } else {
-            return res.status(400).json({
-                message: 'Invalid action',
-            });
-        }
-    } else {
-        return res.status(405).json({
-            message: 'Method Not Allowed',
-        });
+  // GET: Return current room state (for client polling)
+  if (req.method === 'GET') {
+    const room = getRoom(roomId);
+    
+    if (!room) {
+      return res.status(404).json({ error: 'ROOM_NOT_FOUND' });
     }
+    
+    const { playerName } = req.query;
+    
+    // Return room state (hide secret color except for clue giver or reveal phase)
+    const response = {
+      ...room,
+      gameState: room.gameState ? {
+        ...room.gameState,
+        secretColor: (room.gameState.phase === 'reveal' || 
+                     (playerName && room.players[room.gameState.clueGiverIndex]?.name === playerName && 
+                      (room.gameState.phase === 'clue1' || room.gameState.phase === 'clue2'))) 
+                     ? room.gameState.secretColor : null,
+        secretColorRow: (room.gameState.phase === 'reveal' || 
+                        (playerName && room.players[room.gameState.clueGiverIndex]?.name === playerName && 
+                         (room.gameState.phase === 'clue1' || room.gameState.phase === 'clue2'))) 
+                        ? room.gameState.secretColorRow : null,
+        secretColorCol: (room.gameState.phase === 'reveal' || 
+                        (playerName && room.players[room.gameState.clueGiverIndex]?.name === playerName && 
+                         (room.gameState.phase === 'clue1' || room.gameState.phase === 'clue2'))) 
+                        ? room.gameState.secretColorCol : null
+      } : null
+    };
+    
+    return res.status(200).json(response);
+  }
+
+  // POST: Execute actions
+  if (req.method === 'POST') {
+    const { action, playerName, clueWord, secretColor, row, col } = req.body;
+
+    // Action: create-room
+    if (action === 'create-room') {
+      const existingRoom = getRoom(roomId);
+      
+      if (existingRoom) {
+        return res.status(400).json({ error: 'ROOM_EXISTS' });
+      }
+      
+      if (!playerName || playerName.trim().length === 0) {
+        return res.status(400).json({ error: 'INVALID_NAME' });
+      }
+      
+      const room = createRoom(roomId, playerName.trim());
+      return res.status(200).json({ success: true, room });
+    }
+
+    // Action: join-room
+    if (action === 'join-room') {
+      if (!playerName || playerName.trim().length === 0) {
+        return res.status(400).json({ error: 'INVALID_NAME' });
+      }
+      
+      const result = addPlayer(roomId, playerName.trim());
+      
+      if (result.error) {
+        return res.status(400).json(result);
+      }
+      
+      return res.status(200).json(result);
+    }
+
+    // Action: start-game
+    if (action === 'start-game') {
+      const result = startGame(roomId, playerName);
+      
+      if (result.error) {
+        return res.status(400).json(result);
+      }
+      
+      return res.status(200).json(result);
+    }
+
+    // Action: kick-player
+    if (action === 'kick-player') {
+      const { targetPlayerName } = req.body;
+      
+      if (!targetPlayerName) {
+        return res.status(400).json({ error: 'INVALID_TARGET' });
+      }
+      
+      const result = kickPlayer(roomId, playerName, targetPlayerName);
+      
+      if (result.error) {
+        return res.status(400).json(result);
+      }
+      
+      return res.status(200).json(result);
+    }
+
+    // Action: submit-clue
+    if (action === 'submit-clue') {
+      if (!clueWord || clueWord.trim().length === 0) {
+        return res.status(400).json({ error: 'INVALID_CLUE' });
+      }
+      
+      const result = submitClue(roomId, playerName, clueWord.trim());
+      
+      if (result.error) {
+        return res.status(400).json(result);
+      }
+      
+      return res.status(200).json(result);
+    }
+
+    // Action: place-chip
+    if (action === 'place-chip') {
+      if (typeof row !== 'number' || typeof col !== 'number') {
+        return res.status(400).json({ error: 'INVALID_POSITION' });
+      }
+      
+      const result = placeChip(roomId, playerName, row, col);
+      
+      if (result.error) {
+        return res.status(400).json(result);
+      }
+      
+      return res.status(200).json(result);
+    }
+
+    // Action: next-round
+    if (action === 'next-round') {
+      const result = nextRound(roomId);
+      
+      if (result.error) {
+        return res.status(400).json(result);
+      }
+      
+      return res.status(200).json(result);
+    }
+
+    // Unknown action
+    return res.status(400).json({ error: 'UNKNOWN_ACTION' });
+  }
+
+  // Method not allowed
+  return res.status(405).json({ error: 'METHOD_NOT_ALLOWED' });
 }
