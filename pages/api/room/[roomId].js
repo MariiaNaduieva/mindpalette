@@ -16,12 +16,12 @@ import {
  * - GET: Fetch current room state (for polling)
  * - POST: Execute actions (create, join, start-game, submit-clue, place-chip, next-round)
  */
-export default function handler(req, res) {
+export default async function handler(req, res) {
   const { roomId } = req.query;
 
   // GET: Return current room state (for client polling)
   if (req.method === 'GET') {
-    const room = getRoom(roomId);
+    const room = await getRoom(roomId);
     
     if (!room) {
       return res.status(404).json({ error: 'ROOM_NOT_FOUND' });
@@ -58,7 +58,7 @@ export default function handler(req, res) {
 
     // Action: create-room
     if (action === 'create-room') {
-      const existingRoom = getRoom(roomId);
+      const existingRoom = await getRoom(roomId);
       
       if (existingRoom) {
         return res.status(400).json({ error: 'ROOM_EXISTS' });
@@ -68,7 +68,7 @@ export default function handler(req, res) {
         return res.status(400).json({ error: 'INVALID_NAME' });
       }
       
-      const room = createRoom(roomId, playerName.trim());
+      const room = await createRoom(roomId, playerName.trim());
       return res.status(200).json({ success: true, room });
     }
 
@@ -78,7 +78,7 @@ export default function handler(req, res) {
         return res.status(400).json({ error: 'INVALID_NAME' });
       }
       
-      const result = addPlayer(roomId, playerName.trim());
+      const result = await addPlayer(roomId, playerName.trim());
       
       if (result.error) {
         return res.status(400).json(result);
@@ -89,7 +89,7 @@ export default function handler(req, res) {
 
     // Action: start-game
     if (action === 'start-game') {
-      const result = startGame(roomId, playerName);
+      const result = await startGame(roomId, playerName);
       
       if (result.error) {
         return res.status(400).json(result);
@@ -106,7 +106,7 @@ export default function handler(req, res) {
         return res.status(400).json({ error: 'INVALID_TARGET' });
       }
       
-      const result = kickPlayer(roomId, playerName, targetPlayerName);
+      const result = await kickPlayer(roomId, playerName, targetPlayerName);
       
       if (result.error) {
         return res.status(400).json(result);
@@ -121,7 +121,7 @@ export default function handler(req, res) {
         return res.status(400).json({ error: 'INVALID_CLUE' });
       }
       
-      const result = submitClue(roomId, playerName, clueWord.trim());
+      const result = await submitClue(roomId, playerName, clueWord.trim());
       
       if (result.error) {
         return res.status(400).json(result);
@@ -136,7 +136,7 @@ export default function handler(req, res) {
         return res.status(400).json({ error: 'INVALID_POSITION' });
       }
       
-      const result = placeChip(roomId, playerName, row, col);
+      const result = await placeChip(roomId, playerName, row, col);
       
       if (result.error) {
         return res.status(400).json(result);
@@ -147,7 +147,7 @@ export default function handler(req, res) {
 
     // Action: next-round
     if (action === 'next-round') {
-      const result = nextRound(roomId);
+      const result = await nextRound(roomId);
       
       if (result.error) {
         return res.status(400).json(result);

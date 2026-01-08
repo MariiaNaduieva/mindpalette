@@ -1,6 +1,4 @@
-// In-memory store for game rooms
-// Structure: { roomId: { ...roomData } }
-export const rooms = {};
+import { getRoom as getRoomFromKV, setRoom as setRoomToKV } from '../lib/kv';
 
 // Available chip colors for players
 const CHIP_COLORS = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2'];
@@ -100,10 +98,10 @@ export const COLOR_GRID = generateColorGrid();
 /**
  * Create a new game room
  */
-export function createRoom(roomId, creatorName) {
+export async function createRoom(roomId, creatorName) {
   const chipColor = CHIP_COLORS[0];
   
-  rooms[roomId] = {
+  const room = {
     roomId,
     creatorId: creatorName, // First player is creator
     status: 'lobby', // 'lobby', 'playing', 'finished'
@@ -119,21 +117,22 @@ export function createRoom(roomId, creatorName) {
     lastActivity: Date.now()
   };
   
-  return rooms[roomId];
+  await setRoomToKV(roomId, room);
+  return room;
 }
 
 /**
  * Get room by ID
  */
-export function getRoom(roomId) {
-  return rooms[roomId];
+export async function getRoom(roomId) {
+  return await getRoomFromKV(roomId);
 }
 
 /**
  * Add player to room (only if game hasn't started)
  */
-export function addPlayer(roomId, playerName) {
-  const room = rooms[roomId];
+export async function addPlayer(roomId, playerName) {
+  const room = await getRoomFromKV(roomId);
   
   if (!room) {
     return { error: 'ROOM_NOT_FOUND' };
@@ -166,14 +165,15 @@ export function addPlayer(roomId, playerName) {
   
   room.lastActivity = Date.now();
   
+  await setRoomToKV(roomId, room);
   return { success: true, room };
 }
 
 /**
  * Start the game (only creator can start)
  */
-export function startGame(roomId, playerName) {
-  const room = rooms[roomId];
+export async function startGame(roomId, playerName) {
+  const room = await getRoomFromKV(roomId);
   
   if (!room) {
     return { error: 'ROOM_NOT_FOUND' };
@@ -221,14 +221,15 @@ export function startGame(roomId, playerName) {
   
   room.lastActivity = Date.now();
   
+  await setRoomToKV(roomId, room);
   return { success: true, room };
 }
 
 /**
  * Kick player from room (only creator can kick, only in lobby)
  */
-export function kickPlayer(roomId, playerName, targetPlayerName) {
-  const room = rooms[roomId];
+export async function kickPlayer(roomId, playerName, targetPlayerName) {
+  const room = await getRoomFromKV(roomId);
   
   if (!room) {
     return { error: 'ROOM_NOT_FOUND' };
@@ -255,14 +256,15 @@ export function kickPlayer(roomId, playerName, targetPlayerName) {
   room.players.splice(playerIndex, 1);
   room.lastActivity = Date.now();
   
+  await setRoomToKV(roomId, room);
   return { success: true, room };
 }
 
 /**
  * Submit clue word (clue giver only)
  */
-export function submitClue(roomId, playerName, clueWord) {
-  const room = rooms[roomId];
+export async function submitClue(roomId, playerName, clueWord) {
+  const room = await getRoomFromKV(roomId);
   
   if (!room || room.status !== 'playing') {
     return { error: 'INVALID_STATE' };
@@ -292,14 +294,15 @@ export function submitClue(roomId, playerName, clueWord) {
   
   room.lastActivity = Date.now();
   
+  await setRoomToKV(roomId, room);
   return { success: true, room };
 }
 
 /**
  * Place chip on grid (non-clue-giver players)
  */
-export function placeChip(roomId, playerName, row, col) {
-  const room = rooms[roomId];
+export async function placeChip(roomId, playerName, row, col) {
+  const room = await getRoomFromKV(roomId);
   
   if (!room || room.status !== 'playing') {
     return { error: 'INVALID_STATE' };
@@ -353,6 +356,7 @@ export function placeChip(roomId, playerName, row, col) {
   
   room.lastActivity = Date.now();
   
+  await setRoomToKV(roomId, room);
   return { success: true, room };
 }
 
@@ -403,8 +407,8 @@ function calculatePoints(room) {
 /**
  * Move to next round
  */
-export function nextRound(roomId) {
-  const room = rooms[roomId];
+export async function nextRound(roomId) {
+  const room = await getRoomFromKV(roomId);
   
   if (!room || room.status !== 'playing') {
     return { error: 'INVALID_STATE' };
@@ -421,6 +425,7 @@ export function nextRound(roomId) {
   if (gameState.round > gameState.maxRounds) {
     // Game finished
     room.status = 'finished';
+    await setRoomToKV(roomId, room);
     return { success: true, room, gameFinished: true };
   }
   
@@ -441,19 +446,14 @@ export function nextRound(roomId) {
   
   room.lastActivity = Date.now();
   
+  await setRoomToKV(roomId, room);
   return { success: true, room };
 }
 
 /**
  * Clean up old rooms (call periodically)
+ * Not needed with KV since we set expiration on save
  */
-export function cleanupOldRooms() {
-  const now = Date.now();
-  const timeout = 2 * 60 * 60 * 1000; // 2 hours
-  
-  Object.keys(rooms).forEach(roomId => {
-    if (now - rooms[roomId].lastActivity > timeout) {
-      delete rooms[roomId];
-    }
-  });
+export async function cleanupOldRooms() {
+  // No-op - KV handles expiration automatically
 }
